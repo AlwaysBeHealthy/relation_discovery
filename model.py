@@ -102,27 +102,32 @@ def main():
 			user_inputs.append(layers.Input(shape=(dim, )))
 			friend_inputs.append(layers.Input(shape=(dim, )))
 			stranger_inputs.append(layers.Input(shape=(dim, )))
-			embedding_map_list.append(layers.Dense(embedding_dim))
+			if feature_name == "birthday":
+				embedding_map_list.append(layers.Dense(3))
+			else:
+				embedding_map_list.append(layers.Dense(embedding_dim))
 
 	first_order_weight = layers.Dense(1, name="first_order")
 
 	# the deep layer stack
-	layer_size = [32, 32, 32]
+	layer_size = [32, 32, 32, 32, 32]
 	layer_stack = []
 
 	for tensor_size in layer_size:
 		layer_stack.append(layers.Dense(tensor_size, activation="relu"))
 	layer_stack.append(layers.Dense(1))
 
+	balance_layer = layers.Dense(1)
+
 	# friend part
 	friend_wide_score = wide_part(user_inputs, friend_inputs, embedding_map_list, first_order_weight)
 	friend_deep_score = deep_part(user_inputs, friend_inputs, embedding_map_list, layer_stack)
-	friend_score = layers.add([friend_wide_score, friend_deep_score])
+	friend_score = balance_layer(layers.concatenate([friend_wide_score, friend_deep_score]))
 
 	# stranger part
 	stranger_wide_score = wide_part(user_inputs, stranger_inputs, embedding_map_list, first_order_weight)
 	stranger_deep_score = deep_part(user_inputs, stranger_inputs, embedding_map_list, layer_stack)
-	stranger_score = layers.add([stranger_wide_score, stranger_deep_score])
+	stranger_score = balance_layer(layers.concatenate([stranger_wide_score, stranger_deep_score]))
 
 	# friend_score - stranger_score
 	deepfm_out = layers.subtract([friend_score, stranger_score], name="diff_layer")
