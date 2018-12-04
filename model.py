@@ -114,15 +114,18 @@ def main():
 		layer_stack.append(layers.Dense(tensor_size, activation="relu"))
 	layer_stack.append(layers.Dense(1))
 
+	balance = layers.Dense(1)
+
 	# friend part
 	friend_wide_score = wide_part(user_inputs, friend_inputs, embedding_map_list, first_order_weight)
 	friend_deep_score = deep_part(user_inputs, friend_inputs, embedding_map_list, layer_stack)
-	friend_score = layers.add([friend_wide_score, friend_deep_score])
+
+	friend_score = balance(layers.concatenate([friend_wide_score, friend_deep_score]))
 
 	# stranger part
 	stranger_wide_score = wide_part(user_inputs, stranger_inputs, embedding_map_list, first_order_weight)
 	stranger_deep_score = deep_part(user_inputs, stranger_inputs, embedding_map_list, layer_stack)
-	stranger_score = layers.add([stranger_wide_score, stranger_deep_score])
+	stranger_score = balance(layers.concatenate([stranger_wide_score, stranger_deep_score]))
 
 	# friend_score - stranger_score
 	deepfm_out = layers.subtract([friend_score, stranger_score], name="diff_layer")
