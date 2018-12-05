@@ -6,8 +6,8 @@ import keras.backend as K
 from sklearn.metrics import roc_auc_score
 
 layers = keras.layers
-embedding_dim = 10
-epoch_num = 1000
+embedding_dim = 5
+epoch_num = 100
 
 
 def wide_part(input_a, input_b, embedding_map_list, first_order_weight, side_info_balance):
@@ -42,6 +42,7 @@ def wide_part(input_a, input_b, embedding_map_list, first_order_weight, side_inf
 	fm_output = layers.concatenate(inner_product_list, axis=-1)
 	fm_output = side_info_balance(fm_output)
 	return fm_output
+	# return layers.dot([embedding_a_list[0], embedding_b_list[0]], axes=1)
 
 
 def deep_part(input_a, input_b, embedding_map_list, deep_layers):
@@ -78,7 +79,7 @@ def main():
 
 	print("Reading Data ...")
 	network_id = "2"
-	data = data_generator.Data(network_id, hot_threshold=10)
+	data = data_generator.Data(network_id, hot_threshold=10, is_cold=False)
 
 	# get the test set and the size of it
 	test_set = data.get_testset()
@@ -95,7 +96,7 @@ def main():
 	user_inputs.append(layers.Input(shape=(id_dim,)))
 	friend_inputs.append(layers.Input(shape=(id_dim,)))
 	stranger_inputs.append(layers.Input(shape=(id_dim,)))
-	embedding_map_list = [layers.Dense(embedding_dim)]
+	embedding_map_list = [layers.Dense(embedding_dim, kernel_regularizer=keras.regularizers.l2(0.001))]
 
 	for feature_name in input_dimension:
 		if feature_name != "id":
@@ -103,13 +104,13 @@ def main():
 			user_inputs.append(layers.Input(shape=(dim, )))
 			friend_inputs.append(layers.Input(shape=(dim, )))
 			stranger_inputs.append(layers.Input(shape=(dim, )))
-			embedding_map_list.append(layers.Dense(embedding_dim))
+			embedding_map_list.append(layers.Dense(embedding_dim, kernel_regularizer=keras.regularizers.l2(0.001)))
 
 	first_order_weight = layers.Dense(1, name="first_order")
 	side_info_balance = layers.Dense(1)
 
 	# the deep layer stack
-	layer_size = [128, 64, 32]
+	layer_size = [32, 32, 32, 32, 32]
 	layer_stack = []
 
 	for tensor_size in layer_size:

@@ -3,13 +3,14 @@ import random as random
 
 
 class Data:
-	def __init__(self, nid, hot_threshold=10):
+	def __init__(self, nid, hot_threshold=10, is_cold=False):
 		self.__network_id = nid
 		self.__directory = "./new_data/"
 		self.__edge_file = nid+".edges"
 		self.__feature_field_file = nid+".featnames"
 		self.__feature_file = nid+".feat"
 		self.__hot_threshold = hot_threshold
+		self.__is_cold = is_cold
 
 		self.__raw_friends_mat = {}
 		self.__feature_field = {}
@@ -60,13 +61,22 @@ class Data:
 		# leave one out as the test set
 		# avoid isolated nodes, so some users will be skipped
 		for user_id in self.__friends_mat:
-			if len(self.__friends_mat[user_id]) >= self.__hot_threshold:
-				# sample a friend id of this user
-				rand_fid = self.__sample_friend_id(user_id)
-				# move this link from the original friend matrix to the test friend matrix
-				self.__test_mat.append([user_id, rand_fid])
-				self.__friends_mat[user_id].remove(rand_fid)
-				self.__friends_mat[rand_fid].remove(user_id)
+			if not self.__is_cold:
+				if len(self.__friends_mat[user_id]) >= self.__hot_threshold:
+					# sample a friend id of this user
+					rand_fid = self.__sample_friend_id(user_id)
+					# move this link from the original friend matrix to the test friend matrix
+					self.__test_mat.append([user_id, rand_fid])
+					self.__friends_mat[user_id].remove(rand_fid)
+					self.__friends_mat[rand_fid].remove(user_id)
+			else:
+				if 2 <= len(self.__friends_mat[user_id]) < self.__hot_threshold:
+					# sample a friend id of this user
+					rand_fid = self.__sample_friend_id(user_id)
+					# move this link from the original friend matrix to the test friend matrix
+					self.__test_mat.append([user_id, rand_fid])
+					self.__friends_mat[user_id].remove(rand_fid)
+					self.__friends_mat[rand_fid].remove(user_id)
 
 	def __sample_friend_id(self, user_id):
 		num_friend = len(self.__friends_mat[user_id])
