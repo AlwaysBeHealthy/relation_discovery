@@ -78,7 +78,7 @@ def main():
 
 	print("Reading Data ...")
 	network_id = "2"
-	data = data_generator.Data(network_id)
+	data = data_generator.Data(network_id, hot_threshold=10)
 
 	# get the test set and the size of it
 	test_set = data.get_testset()
