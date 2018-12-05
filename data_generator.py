@@ -5,7 +5,7 @@ import random as random
 class Data:
 	def __init__(self, nid, hot_threshold=10):
 		self.__network_id = nid
-		self.__directory = "./data/"
+		self.__directory = "./new_data/"
 		self.__edge_file = nid+".edges"
 		self.__feature_field_file = nid+".featnames"
 		self.__feature_file = nid+".feat"

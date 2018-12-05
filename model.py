@@ -10,7 +10,7 @@ embedding_dim = 10
 epoch_num = 1000
 
 
-def wide_part(input_a, input_b, embedding_map_list, first_order_weight):
+def wide_part(input_a, input_b, embedding_map_list, first_order_weight, side_info_balance):
 	embedding_a_list = []
 	embedding_b_list = []
 	input_list = []
@@ -26,6 +26,7 @@ def wide_part(input_a, input_b, embedding_map_list, first_order_weight):
 
 	# Generate the inner product layer
 	inner_product_list = [layers.dot([embedding_a_list[0], embedding_b_list[0]], axes=1)]
+
 	for i in range(1, len(embedding_a_list)):
 		for j in range(i+1, len(embedding_a_list)):
 			inner_product_list.append(layers.dot([embedding_a_list[i], embedding_a_list[j]], axes=1))
@@ -38,9 +39,9 @@ def wide_part(input_a, input_b, embedding_map_list, first_order_weight):
 			inner_product_list.append(layers.dot([embedding_a_list[i], embedding_b_list[j]], axes=1))
 
 	inner_product_list.append(first_order_output)
-	fm_output = layers.add(inner_product_list)
+	fm_output = layers.concatenate(inner_product_list, axis=-1)
+	fm_output = side_info_balance(fm_output)
 	return fm_output
-	# return layers.dot([embedding_map_list[0](input_a[0]), embedding_map_list[0](input_b[0])], axes=1)
 
 
 def deep_part(input_a, input_b, embedding_map_list, deep_layers):
@@ -53,7 +54,7 @@ def deep_part(input_a, input_b, embedding_map_list, deep_layers):
 	output = layers.concatenate(embedding_list)
 
 	for layer in deep_layers:
-		output = layer(output)
+		output = layers.Dropout(0.5)(layer(output))
 	return output
 
 
@@ -76,8 +77,8 @@ def main():
 	debug_switch = False
 
 	print("Reading Data ...")
-	network_id = "348"
-	data = data_generator.Data(network_id, 2)
+	network_id = "2"
+	data = data_generator.Data(network_id)
 
 	# get the test set and the size of it
 	test_set = data.get_testset()
@@ -102,35 +103,35 @@ def main():
 			user_inputs.append(layers.Input(shape=(dim, )))
 			friend_inputs.append(layers.Input(shape=(dim, )))
 			stranger_inputs.append(layers.Input(shape=(dim, )))
-			if feature_name == "birthday":
-				embedding_map_list.append(layers.Dense(3))
-			else:
-				embedding_map_list.append(layers.Dense(embedding_dim))
+			embedding_map_list.append(layers.Dense(embedding_dim))
 
 	first_order_weight = layers.Dense(1, name="first_order")
+	side_info_balance = layers.Dense(1)
 
 	# the deep layer stack
-	layer_size = [32, 32, 32, 32, 32]
+	layer_size = [128, 64, 32]
 	layer_stack = []
 
 	for tensor_size in layer_size:
 		layer_stack.append(layers.Dense(tensor_size, activation="relu"))
 	layer_stack.append(layers.Dense(1))
 
-	balance_layer = layers.Dense(1)
+	balance_layer = layers.Dense(1, name="wd_balance", kernel_constraint=keras.constraints.non_neg())
 
 	# friend part
-	friend_wide_score = wide_part(user_inputs, friend_inputs, embedding_map_list, first_order_weight)
+	friend_wide_score = wide_part(user_inputs, friend_inputs, embedding_map_list, first_order_weight, side_info_balance)
 	friend_deep_score = deep_part(user_inputs, friend_inputs, embedding_map_list, layer_stack)
 	friend_score = balance_layer(layers.concatenate([friend_wide_score, friend_deep_score]))
 
 	# stranger part
-	stranger_wide_score = wide_part(user_inputs, stranger_inputs, embedding_map_list, first_order_weight)
+	stranger_wide_score = wide_part(user_inputs, stranger_inputs, embedding_map_list, first_order_weight, side_info_balance)
 	stranger_deep_score = deep_part(user_inputs, stranger_inputs, embedding_map_list, layer_stack)
 	stranger_score = balance_layer(layers.concatenate([stranger_wide_score, stranger_deep_score]))
 
 	# friend_score - stranger_score
 	deepfm_out = layers.subtract([friend_score, stranger_score], name="diff_layer")
+	# deepfm_out = layers.subtract([friend_wide_score, stranger_wide_score], name="diff_layer")
+	# deepfm_out = layers.subtract([friend_deep_score, stranger_deep_score], name="diff_layer")
 	deepfm_out = layers.Dense(1, activation="sigmoid", trainable=False, kernel_initializer="ones", name="sigmoid_output")(deepfm_out)
 
 	score_model = keras.Model(inputs=user_inputs+friend_inputs, outputs=friend_wide_score)
@@ -140,8 +141,10 @@ def main():
 	print("AUC before training:", get_auc(score_model, test_set, data))
 	for epoch_idx in range(epoch_num):
 		X, train_num = data.sample()
-		deepfm_model.fit(X, np.ones(train_num), batch_size=32, epochs=1, shuffle=True, verbose=0)
-		print("AUC:", get_auc(score_model, test_set, data))
+		deepfm_model.fit(X, np.ones(train_num), batch_size=32, epochs=1, shuffle=True, verbose=2)
+		if epoch_idx % 10 == 0:
+			print("AUC:", get_auc(score_model, test_set, data))
+			print(deepfm_model.get_layer("wd_balance").get_weights())
 
 
 if __name__ == '__main__':
